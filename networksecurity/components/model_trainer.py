@@ -1,5 +1,6 @@
 import os
 import sys
+import mlflow
 
 from sklearn.ensemble import AdaBoostClassifier, GradientBoostingClassifier, RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
@@ -26,6 +27,18 @@ class ModelTrainer:
             self.model_training_config=model_training_config
         except Exception as e:
             raise NetworkSecurityException(e,sys)
+        
+        
+    def track_mlflow(self,best_model,classificationmetric):
+        with mlflow.start_run():
+            f1_score=classificationmetric.f1_score
+            precision_score=classificationmetric.precision_score
+            recall_score=classificationmetric.recall_score
+            
+            mlflow.log_metric("f1_score",f1_score)
+            mlflow.log_metric("precision_score",precision_score)
+            mlflow.log_metric("recall_score",recall_score)
+            mlflow.sklearn.log_model(best_model,"model")
     
     def train_model(self,X_train,y_train,X_test,y_test):
         try:
@@ -46,12 +59,12 @@ class ModelTrainer:
                     # 'criterion':['gini', 'entropy', 'log_loss'],
                     
                     # 'max_features':['sqrt','log2',None],
-                    'n_estimators': [8,16,32,128,256]
+                    'n_estimators': [8,16,32,128,170,256]
                 },
                 "Gradient Boosting":{
                     # 'loss':['log_loss', 'exponential'],
-                    'learning_rate':[.1,.01,.05,.001],
-                    'subsample':[0.6,0.7,0.75,0.85,0.9],
+                    'learning_rate':[.1,.01,.05,0.08,.001],
+                    'subsample':[0.6,0.7,0.75,0.9],
                     # 'criterion':['squared_error', 'friedman_mse'],
                     # 'max_features':['auto','sqrt','log2'],
                     'n_estimators': [8,16,32,64,128,256]
@@ -59,7 +72,7 @@ class ModelTrainer:
                 "Logistic Regression":{},
                 "AdaBoost":{
                     'learning_rate':[.1,.01,.001],
-                    'n_estimators': [8,16,32,64,128,256]
+                    'n_estimators': [8,16,32,64,128,170,256]
                 }
                 
             }
@@ -74,8 +87,15 @@ class ModelTrainer:
             y_train_pred=best_model.predict(X_train)
             classification_train_metric=get_classification_score(y_train,y_train_pred)
             
+            ## Track the mlflow
+            
+            self.track_mlflow(best_model=best_model,classificationmetric=classification_train_metric)
+            
             y_test_pred=best_model.predict(X_test)
             classification_test_metric=get_classification_score(y_test,y_test_pred)
+            
+            ## Track the mlflow for test metrics
+            self.track_mlflow(best_model=best_model,classificationmetric=classification_test_metric)
             
             
             preprocessor=load_object(filepath=self.data_transformation_artifact.transformed_object_file_path)
